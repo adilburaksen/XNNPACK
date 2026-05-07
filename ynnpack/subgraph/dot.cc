@@ -501,6 +501,14 @@ uint32_t define_pack_b(ynn_subgraph_t subgraph, const dot_type& type,
     if (num_k_dims > 1) {
       sched->force_root = true;
     }
+    // ki (dim 0) and ko (dim 2) must not be split.
+    // We enforce this by requiring their step to be equal to their extent.
+    slinky::expr tile_k_const = output.physical_extent(0);
+    slinky::expr tiles_k = output.physical_extent(2);
+    sched->loop_splits.push_back({ki, tile_k_const, slinky::loop::serial,
+                                  tile_k_const, /*step_is_required=*/true});
+    sched->loop_splits.push_back({ko, tiles_k, slinky::loop::serial, tiles_k,
+                                  /*step_is_required=*/true});
     func.user_data() = sched.get();
     runtime.scheduling_info_storage.push_back(std::move(sched));
 
@@ -831,11 +839,12 @@ ynn_status define_dot(ynn_subgraph& subgraph, size_t num_k_dims,
   assert(subgraph.is_valid_value(input_a_id));
   assert(subgraph.is_valid_value(input_b_id));
   assert(output_id);
-  const bool b_transposed =
-      always_alias_transpose(subgraph, input_b_id) == ynn_status_success;
-
   const ynn_value& a = subgraph.value(input_a_id);
   const ynn_value& b = subgraph.value(input_b_id);
+  const bool is_sub_byte = type_size_bits(b.type) < 8;
+  const bool b_transposed =
+      !is_sub_byte &&
+      always_alias_transpose(subgraph, input_b_id) == ynn_status_success;
   const ynn_type c_type = deduce_output_type(a.type, b.type);
   ynn_value& c = subgraph.get_output_value(output_id, c_type);
   if (input_c_id != YNN_INVALID_VALUE_ID) {
@@ -866,6 +875,11 @@ ynn_status define_dot(ynn_subgraph& subgraph, size_t num_k_dims,
   //    compatible with the packed B layout and the transposed-ness of A.
 
   dot_type type = {a.type, b.type, c.type};
+  // We are going to convert packed data to int8, so we need to select kernels
+  // based on that.
+  if (is_sub_byte) {
+    type.b = ynn_type_int8;
+  }
   dot_shape shape;
   learn_shape_from_b(shape, num_k_dims, b);
   static constexpr dot_packed_shape no_tile_k = {0, 1};
@@ -875,7 +889,10 @@ ynn_status define_dot(ynn_subgraph& subgraph, size_t num_k_dims,
       (subgraph.flags & YNN_FLAG_CONSISTENT_ARITHMETIC) != 0;
   uint32_t kernel_flags =
       consistent_arithmetic ? dot_flag::consistent_arithmetic : 0;
-  dot_kernel kernel = get_dot_kernel(type, shape, packed_shape, kernel_flags);
+  const int element_count = type_element_count(b.type);
+  dot_kernel kernel =
+      get_dot_kernel(type, shape, packed_shape, kernel_flags, std::nullopt,
+                     get_supported_arch_flags(), element_count);
   dot_kernel unpacked_kernel;
   if (b_transposed) {
     // If b is transposed, we might as well use the packing to do it.
@@ -888,8 +905,9 @@ ynn_status define_dot(ynn_subgraph& subgraph, size_t num_k_dims,
   } else {
     unpacked_kernel = kernel;
     if (kernel.tile_k != 1) {
-      unpacked_kernel = get_dot_kernel(type, shape, &no_tile_k,
-                                       kernel_flags | dot_flag::unaligned_b);
+      unpacked_kernel = get_dot_kernel(
+          type, shape, &no_tile_k, kernel_flags | dot_flag::unaligned_b,
+          std::nullopt, get_supported_arch_flags(), element_count);
     }
   }
 
@@ -908,9 +926,23 @@ ynn_status define_dot(ynn_subgraph& subgraph, size_t num_k_dims,
                                 consistent_arithmetic, input_b_id);
   }
 
+  uint32_t dot_input_b_id = packed_b_id;
+  if (is_sub_byte) {
+    uint32_t converted_b_id = YNN_INVALID_VALUE_ID;
+    ynn_status status = ynn_define_convert(
+        &subgraph, packed_b_id, ynn_type_int8, YNN_INVALID_VALUE_ID,
+        YNN_INVALID_VALUE_ID, &converted_b_id, flags);
+    if (status != ynn_status_success) {
+      return status;
+    }
+    subgraph.value(converted_b_id).scale_id = b.scale_id;
+    subgraph.value(converted_b_id).zero_point_id = b.zero_point_id;
+    dot_input_b_id = converted_b_id;
+  }
+
   ynn_node node;
   // We need both the original input b (for shape inference only) and packed b.
-  node.inputs = {input_a_id, input_b_id, input_c_id, packed_b_id};
+  node.inputs = {input_a_id, input_b_id, input_c_id, dot_input_b_id};
   node.outputs = {*output_id};
   node.op = ynn_node::dot{num_k_dims};
 

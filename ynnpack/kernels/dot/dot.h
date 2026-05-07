@@ -130,7 +130,8 @@ dot_kernel get_dot_kernel(const dot_type& type, const dot_shape& shape = {},
                           const dot_packed_shape* dot_packed_shape = nullptr,
                           uint32_t required_flags = 0,
                           std::optional<bool> transpose_a = std::nullopt,
-                          uint64_t arch_flags = get_supported_arch_flags());
+                          uint64_t arch_flags = get_supported_arch_flags(),
+                          int element_count = 1);
 
 }  // namespace ynn
 

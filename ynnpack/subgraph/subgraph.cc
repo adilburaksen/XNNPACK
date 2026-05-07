@@ -674,8 +674,14 @@ ynn_status ynn_subgraph::fold_constants(slinky::thread_pool* threadpool) {
   for (uint32_t i : to_fold) {
     ynn_runtime_value& folded = runtime.value(i);
     assert(values[i].extents.size() == folded.data->rank);
+    int elem_count = ynn::type_element_count(values[i].type);
     for (size_t d = 0; d < folded.data->rank; ++d) {
-      values[i].extents[d] = folded.data->dim(d).extent();
+      slinky::index_t extent = folded.data->dim(d).extent();
+      // Convert back to the logical extent.
+      if (d == 0 && elem_count != 1) {
+        extent *= elem_count;
+      }
+      values[i].extents[d] = extent;
     }
     // Make a new value to put the constant in.
     values[i].data =
