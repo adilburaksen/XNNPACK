@@ -724,7 +724,6 @@ xnnpack_source_set("xnnpack") {
     ":scalar_microkernels",
     ":subgraph",
     ":table",
-    "//third_party/fxdiv",
   ]
   if (xnnpack_enable_arm_kleidiai) {
     deps += [ "//third_party/kleidiai" ]

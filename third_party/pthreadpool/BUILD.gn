@@ -101,5 +101,5 @@ source_set("pthreadpool_standalone") {
 
   public_configs = [ ":pthreadpool_standalone_config" ]
 
-  deps = [ "//third_party/fxdiv" ]
+  deps = []
 }
