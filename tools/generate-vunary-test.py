@@ -8,6 +8,7 @@ import argparse
 import math
 import os
 import sys
+from immutabledict import immutabledict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import xngen
@@ -32,7 +33,7 @@ parser.add_argument(
 )
 parser.set_defaults(defines=list())
 
-OP_TYPES = {
+OP_TYPES = immutabledict({
     "vabs": "Abs",
     "vapproxgelu": "ApproxGELU",
     "vclamp": "Clamp",
@@ -54,11 +55,11 @@ OP_TYPES = {
     "vsqr": "Square",
     "vsqrt": "SquareRoot",
     "vtanh": "TanH",
-}
+})
 
 PARAMS_TYPES = ["Clamp", "ELU", "LeakyReLU"]
 
-SPECIAL_VALUES_F32 = {
+SPECIAL_VALUES_F32 = immutabledict({
     "SquareRoot": (
         4,  # Number of elements.
         "{0.0f, -0.0f, 1.0f, -1.0f}",  # Inputs.
@@ -115,7 +116,7 @@ SPECIAL_VALUES_F32 = {
         "{1.0f, 0.0f, 0.0f}",  # Expected outputs.
         1,  # Error margin in ULP.
     ),
-}
+})
 
 TEST_TEMPLATE = """\
 #define XNN_UKERNEL(arch_flags, ukernel, batch_tile, vector_tile, datatype, params_type, init_params)

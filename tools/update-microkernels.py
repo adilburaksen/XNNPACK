@@ -10,6 +10,8 @@ import io
 import os
 import re
 import sys
+from immutabledict import immutabledict
+
 
 parser = argparse.ArgumentParser(
     description='Utility for re-generating microkernel lists'
@@ -81,12 +83,12 @@ _ISA_LIST = frozenset({
     'wasmsimd',
 })
 
-_ISA_MAP = {
+_ISA_MAP = immutabledict({
     'wasmblendvps': 'wasmrelaxedsimd',
     'wasmpshufb': 'wasmrelaxedsimd',
     'wasmsdot': 'wasmrelaxedsimd',
     'wasmusdot': 'wasmrelaxedsimd',
-}
+})
 
 _ARCH_LIST = frozenset({
     'aarch32',
@@ -101,12 +103,12 @@ _MICROKERNEL_NAME_REGEX = re.compile(
     r'\bxnn_(?:[a-z0-9]+(?:_[a-z0-9]+)*)_ukernel(?:_[a-z0-9]+)*__(?:[a-z0-9]+(?:_[a-z0-9]+)*)\b'
 )
 
-_VERIFICATION_IGNORE_SUBDIRS = {
+_VERIFICATION_IGNORE_SUBDIRS = immutabledict({
     os.path.join('src', 'qs8-requantization'),
     os.path.join('src', 'qu8-requantization'),
     os.path.join('src', 'reference'),
     os.path.join('src', 'xnnpack', 'simd'),
-}
+})
 
 
 def overwrite_if_changed(filepath, content):
