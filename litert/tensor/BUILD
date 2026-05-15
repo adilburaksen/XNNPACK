@@ -47,6 +47,7 @@ cc_library(
     # copybara:uncomment includes = ["utils"],
     deps = [
         "//litert/tensor:datatypes",
+        "//litert/tensor/internal:type_id",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/types:span",
